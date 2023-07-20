@@ -32,13 +32,37 @@ If bots are addressed directly, only these specific characters may reply.
 Otherwise, replies from multiple bots are optional. A reply from one bot is sufficient.
 You may not speak as the real player, Karragan."""
 
+    tempReply = {"replies": [
+            {
+            "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
+            "speaker": "Bromos"
+            },
+            {
+            "message": "Sounds like a plan. Stratholme is a hot spot for valuable loot too. Count me in for a piece of the action.",
+            "speaker": "Osborne"
+            },
+            {
+            "message": "Cleansing Stratholme could also provide us with some valuable research on necromancy and the Scourge. Plus, the dark atmosphere there will give me a chance to test some of my frost spells.",
+            "speaker": "Anetta"
+            },
+            {
+            "message": "The Plaguelands are filled with ancient ruins and hidden treasures. Exploring Stratholme will give me a chance to showcase my hunting skills while lending a hand in purging the Scourge.",
+            "speaker": "Elira"
+            },
+            {
+            "message": "Aye, lad! It appears we all agree then. Let us prepare ourselves and make our way to Stratholme together. We shall bring light, justice, and steel down upon the undead scum!",
+            "speaker": "Bromos"
+            }
+        ]}
+
+
 
     #Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves, elvish verbiage for night elves, etc). 
     settingsMap = {
         "replyMode": {
             "player" : "You should reply out-of-character, i.e. as if you were the player controlling the character.",
             "rp" : "You should reply in-character, i.e. as if you were the speaking character themselves. Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves, elvish verbiage for night elves, etc). ",
-            "rpshort": "You should reply in-character, i.e. as if you were the speaking character themselves, but do not be overly verbose.  Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves, elvish verbiage for night elves, etc). But be succinct, do not ramble."
+            "rpshort": "You should reply in-character, i.e. as if you were the speaking character themselves, but do not be overly verbose. Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves; eloquent and flowery language for night elves, etc). But be succinct, do not ramble."
         }
     }
 
@@ -92,7 +116,7 @@ You may not speak as the real player, Karragan."""
 
             conversations[groupId]["history"].append(message)
 
-            replies = makeReply(conversations[groupId], context)
+            replies = makeReply(conversations[groupId], context,groupId)
 
             ##just for debugging purposes
             return replies, 200
@@ -103,16 +127,25 @@ You may not speak as the real player, Karragan."""
         conversations[groupId] = {"mode" : mode, "history" : []}
 
 
-    def makeReply(groupConversation, context):
+    def makeReply(groupConversation, context, groupId):
         modeString = settingsMap["replyMode"][groupConversation["mode"]]
         sysQuery = systemBase + "\n" + getContextString(context) + "\n" + postContext + "\n" + modeString
         sysObj = {"role":"system", "content": sysQuery}
 
+        print(sysQuery)
+
+        #allow for historyculling. Only the <lastn> messages in the stored history should be send to GPT
         history = ""
-        for message in groupConversation["history"]:
-            history += message
+        lastn = 100
+        startn = max(0, len(groupConversation["history"])-lastn)
+        for index in range(startn, len(groupConversation["history"])):
+            history += groupConversation["history"][index]
             history += "\n"
         historyObj = {"role":"user", "content": history}
+        
+        #temp
+        return tempReply        
+        
         reply = getReplies(sysObj, historyObj)
         print("--------------------------------------------------")
         print("OpenAI API Response: ",reply)
@@ -124,19 +157,31 @@ You may not speak as the real player, Karragan."""
             if stripped=="":
                 continue
             speakerMessage = stripped.split(":")
-            res["replies"].append({"speaker" : speakerMessage[0].strip(), "message": speakerMessage[1].strip()})
-            #TODO put in local history
+            speaker = speakerMessage[0].strip()
+            mes = speakerMessage[1].strip()
+            res["replies"].append({"speaker" : speaker, "message": mes})
+            conversations[groupId]["history"].append(speaker+": "+mes+"\n")
 
-
-        #print("My Response:\n", res)
+        #print("Updated Local History: ", conversations[groupId]["history"])
         return res
 
-        #format replies, split by newLine, then by colon, return that way for easy calling and put the combined in the history
-        #print("history: ", history)
-        #print("sysMessage: ", sysQuery)
-
-    def getContextString(context):
-        #print(context)
+    def getContextString(cont):
+        context = "The Party consists of the real player " + cont["players"][0]["name"]+ ", " + getUnitString(cont["players"][0]) +";\n"
+        context += "and the following Bots/NPCs:\n"
+        lastBotIdx = len(cont["bots"])
+        for index in range(0, lastBotIdx):
+            bot = cont["bots"][index]
+            context += bot["name"] + ", "
+            context += getUnitString(bot)
+            if(index == lastBotIdx-1):
+                context+=".\n"
+            #elif(index == lastBotIdx-2):
+            #    context+=", and\n"
+            else:
+                context += ";\n"
+        
+        context += "All members of the party are Level " + str(cont["players"][0]["level"]) + "."
+        return context        
         return tempContext;
 
     def getReplies(sysMessage, historyMessage):
@@ -151,6 +196,9 @@ You may not speak as the real player, Karragan."""
         stop=["Karragan:"]
         )
         return response['choices'][0]['message']['content']
+    
+    def getUnitString(unitObj):
+        return "the " + unitObj["gender"] + " " + unitObj["race"] + " " + unitObj["spec"] + " " + unitObj["class"]
 
     #debug
     registerGroup(1234)
