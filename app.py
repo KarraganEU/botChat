@@ -5,37 +5,26 @@ import argparse
 
 app = Flask(__name__)
 
-if __name__ == "__main__":
+#TODO get all this junk out of the main function, maybe classify it or seperate module
 
-    parser = argparse.ArgumentParser()
-    #parser.add_argument("--replyMode", help="Whether the bot should reply in-character or out of character", choices=['rpshort', 'rp', 'player'], default='rpshort')
-    parser.add_argument("--key")
-    args = parser.parse_args()
-    apiKey = args.key   
-    openai.api_key = apiKey
-    """apiKey = os.environ.get('API_KEY')
-    if(apiKey == None):
-        print("ERROR: Expected OpenAI API KEY as Environment Variable API_KEY")
-    print(apiKey)"""
-
-    systemBase = """You are taking on the role of characters played by NPCs/Bots in a World of Warcraft - Wrath of the Lich King Party."""
-    tempContext = """The Party consists of the real Player Karragan, the male Human Protection Warrior; and the following Bots/NPCs:
+systemBase = """You are taking on the role of characters played by NPCs/Bots in a World of Warcraft - Wrath of the Lich King Party."""
+tempContext = """The Party consists of the real Player Karragan, the male Human Protection Warrior; and the following Bots/NPCs:
 Bromos, the male Dwarf Holy Paladin;
 Osborne, the male Human Rogue;
 Anetta, the female Human Frost Mage, and 
 Elira, the female Night Elf Hunter.
 All members of the party are Level 26."""
-    postContext = """Do not inject statements about the party and characters that you can not infer from context or game knowledge.
+postContext = """Do not inject statements about the party and characters that you can not infer from context or game knowledge.
 Each reply should start on a new line and be formatted like this: <Speakername>: <text>. 
 Unless specific bots are addressed, you may speak as multiple of the bots in one message, as long as the formatting fits the above. 
 If bots are addressed directly, only these specific characters may reply. 
 Otherwise, replies from multiple bots are optional. A reply from one bot is sufficient.
-You may not speak as the real player, Karragan."""
+You may not speak as the real player, """
 
-    tempReply = {"replies": [
-            {
-            "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
-            "speaker": "Bromos"
+tempReply = {"replies": [
+        {
+        "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
+                    "speaker": "Bromos"
             },
             {
             "message": "Sounds like a plan. Stratholme is a hot spot for valuable loot too. Count me in for a piece of the action.",
@@ -53,11 +42,29 @@ You may not speak as the real player, Karragan."""
             "message": "Aye, lad! It appears we all agree then. Let us prepare ourselves and make our way to Stratholme together. We shall bring light, justice, and steel down upon the undead scum!",
             "speaker": "Bromos"
             }
-        ]}
+    ]}
 
+#a dict of leaderIds (ints)
+#each id maps to a dict with the following components
+#   conv - an array of sequential messages, basically the groups chat history
+#   mode - the reply mode of the bots. This can be either
+#       "rp": the bots are meant to reply "in-character"
+#       "player": the bots are meant to reply as if they were the player controlling the bot character
+conversations = {}
 
+if __name__ == "__main__":
 
-    #Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves, elvish verbiage for night elves, etc). 
+    parser = argparse.ArgumentParser()
+    #parser.add_argument("--replyMode", help="Whether the bot should reply in-character or out of character", choices=['rpshort', 'rp', 'player'], default='rpshort')
+    parser.add_argument("--key")
+    args = parser.parse_args()
+    apiKey = args.key   
+    #apiKey = os.environ.get('API_KEY')
+    if(apiKey == None):
+        print("ERROR: Expected OpenAI API KEY as Environment Variable API_KEY")
+    
+    openai.api_key = apiKey
+
     settingsMap = {
         "replyMode": {
             "player" : "You should reply out-of-character, i.e. as if you were the player controlling the character.",
@@ -66,23 +73,15 @@ You may not speak as the real player, Karragan."""
         }
     }
 
-    #a dict of groupIds (ints)
-    #each id maps to a dict with the following components
-    #   conv - an array of sequential messages, basically the groups chat history
-    #   mode - the reply mode of the bots. This can be either
-    #       "rp": the bots are meant to reply "in-character"
-    #       "player": the bots are meant to reply as if they were the player controlling the bot character
-    conversations = {}
-
     # -------------------------- ROUTES -----------------------------------------
 
     @app.post("/group")
     def postGroup():
         if  request.is_json:
-            groupId = request.get_json()["id"]
+            leaderId = request.get_json()["id"]
             mode = request.get_json().get("mode")
-            registerGroup(groupId,mode)
-            return {"id": groupId, "conv": conversations[groupId]}, 201
+            registerGroup(leaderId,mode)
+            return {"id": leaderId, "conv": conversations[leaderId]}, 201
         return {"error": "Request must be JSON"}, 415
 
     # the message entry should be a simple String in the format "<<Sender>>: <<messagetext>>"
@@ -97,11 +96,9 @@ You may not speak as the real player, Karragan."""
     #   race    - race of the character (Gnome, Orc, etc)
     #   class   - class of the character (Mage, Warlock, etc)
     #   gender  - gender of the character
-    @app.post("/group/<groupId>")
-    def getReply(groupId):
-        groupId = int(groupId)
-
-        
+    @app.post("/group/<leaderId>")
+    def getReply(leaderId):
+        leaderId = int(leaderId)
 
         if  request.is_json:
             message = request.get_json().get("string")
@@ -110,26 +107,31 @@ You may not speak as the real player, Karragan."""
              #args.replyMode
             #print(sysQuery)
 
-            group = conversations.get(groupId)
+            group = conversations.get(leaderId)
             if(group==None):
-                return {"error": "Group with id "+ groupId +" is not registered."}, 400
+                registerGroup(leaderId)
+                #return {"error": "Group with id "+ leaderId +" is not registered."}, 400
 
-            conversations[groupId]["history"].append(message)
-
-            replies = makeReply(conversations[groupId], context,groupId)
+            conversations[leaderId]["history"].append(message)            
+            replies = makeReply(conversations[leaderId], context,leaderId)
 
             ##just for debugging purposes
             return replies, 200
         return {"error": "Request must be JSON"}, 415
 
-    def registerGroup(groupId, mode="rpshort"):
+    @app.get("/")
+    def testEndpoint():
+        return "this is a test", 200
+
+    def registerGroup(leaderId, mode="rpshort"):
         mode = "rpshort" if mode==None else mode
-        conversations[groupId] = {"mode" : mode, "history" : []}
+        conversations[leaderId] = {"mode" : mode, "history" : []}
 
 
-    def makeReply(groupConversation, context, groupId):
+    def makeReply(groupConversation, context, leaderId):
         modeString = settingsMap["replyMode"][groupConversation["mode"]]
-        sysQuery = systemBase + "\n" + getContextString(context) + "\n" + postContext + "\n" + modeString
+        playerName = context["players"][0]["name"]
+        sysQuery = systemBase + "\n" + getContextString(context) + "\n" + postContext + playerName + ".\n" + modeString
         sysObj = {"role":"system", "content": sysQuery}
 
         print(sysQuery)
@@ -144,9 +146,9 @@ You may not speak as the real player, Karragan."""
         historyObj = {"role":"user", "content": history}
         
         #temp
-        return tempReply        
+        #return tempReply        
         
-        reply = getReplies(sysObj, historyObj)
+        reply = getReplies(sysObj, historyObj, playerName)
         print("--------------------------------------------------")
         print("OpenAI API Response: ",reply)
         print("---------------------------------------------------")
@@ -157,14 +159,17 @@ You may not speak as the real player, Karragan."""
             if stripped=="":
                 continue
             speakerMessage = stripped.split(":")
+            if(len(speakerMessage)!= 2):
+                continue
             speaker = speakerMessage[0].strip()
             mes = speakerMessage[1].strip()
             res["replies"].append({"speaker" : speaker, "message": mes})
-            conversations[groupId]["history"].append(speaker+": "+mes+"\n")
+            conversations[leaderId]["history"].append(speaker+": "+mes+"\n")
 
-        #print("Updated Local History: ", conversations[groupId]["history"])
+        #print("Updated Local History: ", conversations[leaderId]["history"])
         return res
 
+    #formats the given context JSON into a string with all the necessary context about the group for GPT
     def getContextString(cont):
         context = "The Party consists of the real player " + cont["players"][0]["name"]+ ", " + getUnitString(cont["players"][0]) +";\n"
         context += "and the following Bots/NPCs:\n"
@@ -184,7 +189,7 @@ You may not speak as the real player, Karragan."""
         return context        
         return tempContext;
 
-    def getReplies(sysMessage, historyMessage):
+    def getReplies(sysMessage, historyMessage, playerName):
         response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo-0613",
         messages=[sysMessage, historyMessage],
@@ -193,12 +198,15 @@ You may not speak as the real player, Karragan."""
         top_p=1,
         frequency_penalty=0.35,
         presence_penalty=0,
-        stop=["Karragan:"]
+        stop=[playerName+":"]   #if the model decides to write for the player, this should interrupt it
         )
         return response['choices'][0]['message']['content']
     
     def getUnitString(unitObj):
-        return "the " + unitObj["gender"] + " " + unitObj["race"] + " " + unitObj["spec"] + " " + unitObj["class"]
+        specString = ""
+        if(unitObj.get("spec") != None):
+            specString = unitObj["spec"] + " "
+        return "the " + unitObj["gender"] + " " + unitObj["race"] + " " + specString + unitObj["class"]
 
     #debug
     registerGroup(1234)
