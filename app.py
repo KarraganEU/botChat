@@ -127,15 +127,28 @@ if __name__ == "__main__":
 
             group = conversations.get(leaderId)
             if(group==None):
-                return {"error": "Group with id "+ leaderId +" is not registered."}, 400
+                return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
             isValid = any(newMode==allowedMode for allowedMode in validModes)
             if(not(isValid)):
-                 return {"error": newMode + " is not a valid conversation mode"}, 400
+                 return {"error": f"{newMode} is not a valid conversation mode. Valid Modes: {validModes}"}, 400
 
+            print(f"Setting chat mode {newMode} for group with leaderId {leaderId}")
             conversations[leaderId]["mode"] = newMode
-            ##just for debugging purposes
             return newMode, 200
         return {"error": "Request must be JSON"}, 415
+    
+    @app.post("/group/<leaderId>/history")
+    def eraseHistory(leaderId):
+        leaderId = int(leaderId)
+
+        group = conversations.get(leaderId)
+        if(group==None):
+            return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
+
+        conversations[leaderId]["history"] = []
+        print(f"Erasing History for group with leaderId {leaderId}")
+
+        return "erased history", 200
 
     def makeReply(groupConversation, context, leaderId):
         modeString = settingsMap["replyMode"][groupConversation["mode"]]
@@ -219,5 +232,7 @@ if __name__ == "__main__":
 
     #debug
     registerGroup(999999)
+    #temp
+    registerGroup(1)
     app.run(debug=True)
 
