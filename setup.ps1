@@ -7,4 +7,4 @@ python -m venv .\venv
 
 pip install -r .\requirements.txt
 
-.\buildAndRun.ps1
+#.\buildAndRun.ps1
