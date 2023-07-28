@@ -4,3 +4,4 @@ __pycache__/
 .vs/VSWorkspaceState.json
 .vs/botChat/v17/.wsuo
 database.db
+log.log

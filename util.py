@@ -3,6 +3,7 @@ import prompts
 import openai
 import argparse
 import os
+import logging
 
 settingsMap = {
     "replyMode": {
@@ -22,9 +23,17 @@ def init(inMemDB):
     apiKey = args.key
     debug = args.debug
     port = args.port
-    #apiKey = os.environ.get('API_KEY')
+
+    logLevel = logging.DEBUG if debug else logging.INFO
+    
+    ch = logging.StreamHandler()
+    fh = logging.FileHandler("log.log", encoding='utf-8')
+    logging.basicConfig(level=logLevel, format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s', handlers=[ch,fh])
+
+    logger = logging.getLogger()
+
     if(apiKey == None):
-        print("ERROR: Expected OpenAI API KEY as Environment Variable API_KEY")    
+        logger.error("Expected OpenAI API KEY as Environment Variable API_KEY")    
     openai.api_key = apiKey
 
     if(not(os.path.isfile(db.DB_NAME)) or debug):
@@ -60,19 +69,20 @@ def registerGroup(leaderId,cache, mode="rpshort"):
     if(cache.get(leaderId)!=None):
         return
     makeGroup(leaderId, cache)
-    changeAndPersistSetting(leaderId, "mode", mode, cache)
-    print("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
+    changeAndPersistSetting(leaderId, "mode", mode, cache)    
+    logging.getLogger().info("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
 
 ## BOT REPLIES
 
 def makeReply(context, leaderId, cache):
+    logger = logging.getLogger()
     groupConversation = cache[leaderId]
     modeString = settingsMap["replyMode"][groupConversation["mode"]]
     playerName = context["players"][0]["name"]
     sysQuery = prompts.systemBase + "\n" + getContextString(context) + "\n" + prompts.postContext + playerName + ".\n" + modeString
     sysObj = {"role":"system", "content": sysQuery}
 
-    print(sysQuery)
+    logger.info(sysQuery)
 
     #allow for historyculling. Only the <lastn> messages in the stored history should be send to GPT
     history = ""
@@ -84,14 +94,14 @@ def makeReply(context, leaderId, cache):
             history += "\n"
     historyObj = {"role":"user", "content": history}
     
-    print(history)
+    logger.info(history)
     #temp
     #return debugReply        
     
     reply = getReplies(sysObj, historyObj, playerName)
-    print("--------------------------------------------------")
-    print("OpenAI API Response: ",reply)
-    print("---------------------------------------------------")
+    logger.info("--------------------------------------------------")
+    logger.info(f"OpenAI API Response: {reply}")
+    logger.info("---------------------------------------------------")
     replies = reply.split("\n")
     res = {"replies" : []}
     for rep in replies:

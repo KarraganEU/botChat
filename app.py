@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
+import logging
 from util import appendAndSave, changeAndPersistSetting, makeReply, init, registerGroup
 import db
+import os
 
 app = Flask(__name__)
 
@@ -39,8 +41,8 @@ debugReply = {"replies": [
 cache = {}
 
 if __name__ == "__main__":
-
     debug, port = init(cache)
+    logger = logging.getLogger()
 
     # -------------------------- ROUTES -----------------------------------------
 
@@ -77,7 +79,7 @@ if __name__ == "__main__":
                 registerGroup(leaderId, cache)
 
             message = context["players"][0]["name"] +": " + message
-            print(message)
+            logger.debug(message);
             appendAndSave(message, leaderId, cache)
             replies = makeReply(context,leaderId, cache)
 
@@ -86,6 +88,7 @@ if __name__ == "__main__":
 
     @app.get("/")
     def testEndpoint():
+        logger.info("Called testendpoint")
         return cache, 200        
     
     @app.post("/group/<leaderId>/mode")
@@ -102,7 +105,7 @@ if __name__ == "__main__":
             if(not(isValid)):
                  return {"error": f"{newMode} is not a valid conversation mode. Valid Modes: {validModes}"}, 400
 
-            print(f"Setting chat mode {newMode} for group with leaderId {leaderId}")
+            logger.info(f"Setting chat mode {newMode} for group with leaderId {leaderId}")
             changeAndPersistSetting(leaderId, "mode", newMode, cache)
             return newMode, 200
         return {"error": "Request must be JSON"}, 415
@@ -115,14 +118,15 @@ if __name__ == "__main__":
         if(group==None):
             return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
 
-        print(f"Erasing History for group with leaderId {leaderId}")
+        logger.info(f"Erasing History for group with leaderId {leaderId}")
         cache[leaderId]["history"] = []
         db.eraseHistory(leaderId)
 
         return "erased history", 200
     
     #debug
-    #registerGroup(999999, cache)
-    #registerGroup(1, cache)
+    if(debug):
+        registerGroup(999999, cache)
+        registerGroup(1, cache)
     app.run(debug=debug, port=port)
 
