@@ -47,8 +47,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     #parser.add_argument("--replyMode", help="Whether the bot should reply in-character or out of character", choices=['rpshort', 'rp', 'player'], default='rpshort')
     parser.add_argument("--key")
+    parser.add_argument("--port", default=5000)
     args = parser.parse_args()
     apiKey = args.key   
+    port = args.port
     #apiKey = os.environ.get('API_KEY')
     if(apiKey == None):
         print("ERROR: Expected OpenAI API KEY as Environment Variable API_KEY")
@@ -234,5 +236,5 @@ if __name__ == "__main__":
     registerGroup(999999)
     #temp
     registerGroup(1)
-    app.run(debug=True)
+    app.run(debug=True, port=port)
 
