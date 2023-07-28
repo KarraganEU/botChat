@@ -36,11 +36,11 @@ debugReply = {"replies": [
 #       "rp": the bots are meant to reply "in-character"
 #       "rpshort":  the bots are meant to reply "in-character" but are explicitly told to not be verbose
 #       "player": the bots are meant to reply as if they were the player controlling the bot character
-conversations = {}
+cache = {}
 
 if __name__ == "__main__":
 
-    debug, port = init(conversations)
+    debug, port = init(cache)
 
     # -------------------------- ROUTES -----------------------------------------
 
@@ -49,8 +49,8 @@ if __name__ == "__main__":
         if  request.is_json:
             leaderId = request.get_json()["id"]
             mode = request.get_json().get("mode")
-            registerGroup(leaderId, conversations, mode)
-            return {"id": leaderId, "conv": conversations[leaderId]}, 201
+            registerGroup(leaderId, cache, mode)
+            return {"id": leaderId, "conv": cache[leaderId]}, 201
         return {"error": "Request must be JSON"}, 415
 
     # the message entry should be a simple String in the format "<<Sender>>: <<messagetext>>"
@@ -73,18 +73,18 @@ if __name__ == "__main__":
             message = request.get_json().get("string")
             context = request.get_json().get("context")
 
-            if(conversations.get(leaderId)==None):
-                registerGroup(leaderId, conversations)
+            if(cache.get(leaderId)==None):
+                registerGroup(leaderId, cache)
 
-            appendAndSave(message, leaderId, conversations)
-            replies = makeReply(context,leaderId, conversations)
+            appendAndSave(message, leaderId, cache)
+            replies = makeReply(context,leaderId, cache)
 
             return replies, 200
         return {"error": "Request must be JSON"}, 415
 
     @app.get("/")
     def testEndpoint():
-        return conversations, 200        
+        return cache, 200        
     
     @app.post("/group/<leaderId>/mode")
     def setChatMode(leaderId):
@@ -93,7 +93,7 @@ if __name__ == "__main__":
         if  request.is_json:
             newMode = request.get_json().get("mode")
 
-            if(conversations.get(leaderId)==None):
+            if(cache.get(leaderId)==None):
                 return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
 
             isValid = any(newMode==allowedMode for allowedMode in validModes)
@@ -101,7 +101,7 @@ if __name__ == "__main__":
                  return {"error": f"{newMode} is not a valid conversation mode. Valid Modes: {validModes}"}, 400
 
             print(f"Setting chat mode {newMode} for group with leaderId {leaderId}")
-            changeAndPersistSetting(leaderId, "mode", newMode, conversations)
+            changeAndPersistSetting(leaderId, "mode", newMode, cache)
             return newMode, 200
         return {"error": "Request must be JSON"}, 415
     
@@ -109,18 +109,18 @@ if __name__ == "__main__":
     def eraseHistory(leaderId):
         leaderId = int(leaderId)
 
-        group = conversations.get(leaderId)
+        group = cache.get(leaderId)
         if(group==None):
             return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
 
         print(f"Erasing History for group with leaderId {leaderId}")
-        conversations[leaderId]["history"] = []
+        cache[leaderId]["history"] = []
         db.eraseHistory(leaderId)
 
         return "erased history", 200
     
     #debug
-    registerGroup(999999, conversations)
-    registerGroup(1, conversations)
+    registerGroup(999999, cache)
+    registerGroup(1, cache)
     app.run(debug=debug, port=port)
 

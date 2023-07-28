@@ -27,7 +27,7 @@ def init(inMemDB):
         print("ERROR: Expected OpenAI API KEY as Environment Variable API_KEY")    
     openai.api_key = apiKey
 
-    if(not(os.path.isfile(db.DB_NAME))): #or debug):
+    if(not(os.path.isfile(db.DB_NAME)) or debug):
         db.init()
     
     db.initFromDB(inMemDB) #could also be a return value
@@ -36,37 +36,37 @@ def init(inMemDB):
 
 
 
-def appendAndSave(message, leaderId, conversations):
+def appendAndSave(message, leaderId, cache):
     """Saves the given message to the DB and appends it to the inMem-Conversation Object"""
     #if(not(message.endswith("\n"))): 
     #    message += "\n"
     #the new line is only "necessary" for open ai to get better prompting and the prompt builder automatically appends it
     #the dbs (in-mem and sqlite) do not need to worry about the \n
-    conversations[leaderId]["history"].append(message)
+    cache[leaderId]["history"].append(message)
     split =  message.split(":")
     db.saveMessage(split[1].strip(), split[0].strip(), leaderId)
 
-def changeAndPersistSetting(leaderId, settingName, newValue, conversations):
-    changeSetting(leaderId,settingName,newValue, conversations)
+def changeAndPersistSetting(leaderId, settingName, newValue, cache):
+    changeSetting(leaderId,settingName,newValue, cache)
     db.updateSettings(settingName, newValue, leaderId)
 
-def changeSetting(leaderId, settingName, newValue, conversations):
-    conversations[leaderId][settingName] = newValue
+def changeSetting(leaderId, settingName, newValue, cache):
+    cache[leaderId][settingName] = newValue
 
-def makeGroup(leaderId,conversations): 
-    conversations[leaderId] = {"history" : []}
+def makeGroup(leaderId,cache): 
+    cache[leaderId] = {"history" : []}
 
-def registerGroup(leaderId,conversations, mode="rpshort"):
-    if(conversations.get(leaderId)!=None):
+def registerGroup(leaderId,cache, mode="rpshort"):
+    if(cache.get(leaderId)!=None):
         return
-    makeGroup(leaderId, conversations)
-    changeAndPersistSetting(leaderId, "mode", mode, conversations)
+    makeGroup(leaderId, cache)
+    changeAndPersistSetting(leaderId, "mode", mode, cache)
     print("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
 
 ## BOT REPLIES
 
-def makeReply(context, leaderId, conversations):
-    groupConversation = conversations[leaderId]
+def makeReply(context, leaderId, cache):
+    groupConversation = cache[leaderId]
     modeString = settingsMap["replyMode"][groupConversation["mode"]]
     playerName = context["players"][0]["name"]
     sysQuery = prompts.systemBase + "\n" + getContextString(context) + "\n" + prompts.postContext + playerName + ".\n" + modeString
@@ -104,7 +104,7 @@ def makeReply(context, leaderId, conversations):
         speaker = speakerMessage[0].strip()
         mes = speakerMessage[1].strip()
         res["replies"].append({"speaker" : speaker, "message": mes})
-        appendAndSave(stripped, leaderId, conversations)
+        appendAndSave(stripped, leaderId, cache)
     return res
 
 #formats the given context JSON into a string with all the necessary context about the group for GPT
