@@ -127,7 +127,25 @@ if __name__ == "__main__":
         mode = "rpshort" if mode==None else mode
         print("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
         conversations[leaderId] = {"mode" : mode, "history" : []}
+    
+    @app.post("/group/<leaderId>/mode")
+    def setChatMode(leaderId):
+        leaderId = int(leaderId)
 
+        if  request.is_json:
+            newMode = request.get_json().get("mode")
+
+            group = conversations.get(leaderId)
+            if(group==None):
+                return {"error": "Group with id "+ leaderId +" is not registered."}, 400
+            isValid = any(newMode==allowedMode for allowedMode in validModes)
+            if(not(isValid)):
+                 return {"error": newMode + " is not a valid conversation mode"}, 400
+
+            conversations[leaderId]["mode"] = newMode
+            ##just for debugging purposes
+            return newMode, 200
+        return {"error": "Request must be JSON"}, 415
 
     def makeReply(groupConversation, context, leaderId):
         modeString = settingsMap["replyMode"][groupConversation["mode"]]
