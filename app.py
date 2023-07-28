@@ -8,7 +8,7 @@ app = Flask(__name__)
 #TODO get all this junk out of the main function, maybe classify it or seperate module
 
 systemBase = """You are taking on the role of characters played by NPCs/Bots in a World of Warcraft - Wrath of the Lich King Party."""
-tempContext = """The Party consists of the real Player Karragan, the male Human Protection Warrior; and the following Bots/NPCs:
+debugContext = """The Party consists of the real Player Karragan, the male Human Protection Warrior; and the following Bots/NPCs:
 Bromos, the male Dwarf Holy Paladin;
 Osborne, the male Human Rogue;
 Anetta, the female Human Frost Mage, and 
@@ -21,7 +21,7 @@ If bots are addressed directly, only these specific characters may reply.
 Otherwise, replies from multiple bots are optional. A reply from one bot is sufficient.
 You may not speak as the real player, """
 
-tempReply = {"replies": [
+debugReply = {"replies": [
         {
         "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
                     "speaker": "Bromos"
@@ -125,6 +125,7 @@ if __name__ == "__main__":
 
     def registerGroup(leaderId, mode="rpshort"):
         mode = "rpshort" if mode==None else mode
+        print("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
         conversations[leaderId] = {"mode" : mode, "history" : []}
 
 
@@ -146,7 +147,7 @@ if __name__ == "__main__":
         historyObj = {"role":"user", "content": history}
         
         #temp
-        #return tempReply        
+        #return debugReply        
         
         reply = getReplies(sysObj, historyObj, playerName)
         print("--------------------------------------------------")
@@ -187,7 +188,7 @@ if __name__ == "__main__":
         
         context += "All members of the party are Level " + str(cont["players"][0]["level"]) + "."
         return context        
-        return tempContext;
+        return debugContext;
 
     def getReplies(sysMessage, historyMessage, playerName):
         response = openai.ChatCompletion.create(
@@ -209,6 +210,6 @@ if __name__ == "__main__":
         return "the " + unitObj["gender"] + " " + unitObj["race"] + " " + specString + unitObj["class"]
 
     #debug
-    registerGroup(1234)
+    registerGroup(999999)
     app.run(debug=True)
 
