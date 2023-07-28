@@ -1,12 +1,8 @@
 from flask import Flask, request, jsonify
-import os
-import openai
-import argparse
-import prompts
+from util import appendAndSave, changeAndPersistSetting, makeReply, init, registerGroup
+import db
 
 app = Flask(__name__)
-
-#TODO get all this junk out of the main function, maybe classify it or seperate module
 
 validModes = ["rpshort", "rp", "player"]
 
@@ -44,26 +40,7 @@ conversations = {}
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
-    #parser.add_argument("--replyMode", help="Whether the bot should reply in-character or out of character", choices=['rpshort', 'rp', 'player'], default='rpshort')
-    parser.add_argument("--key")
-    parser.add_argument("--port", default=5000)
-    args = parser.parse_args()
-    apiKey = args.key   
-    port = args.port
-    #apiKey = os.environ.get('API_KEY')
-    if(apiKey == None):
-        print("ERROR: Expected OpenAI API KEY as Environment Variable API_KEY")
-    
-    openai.api_key = apiKey
-
-    settingsMap = {
-        "replyMode": {
-            "player" : "You should reply out-of-character, i.e. as if you were the player controlling the character.",
-            "rp" : "You should reply in-character, i.e. as if you were the speaking character themselves. Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves, elvish verbiage for night elves, etc). ",
-            "rpshort": "You should reply in-character, i.e. as if you were the speaking character themselves, but do not be overly verbose. Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves; eloquent and flowery language for night elves, etc). But be succinct, do not ramble."
-        }
-    }
+    debug, port = init(conversations)
 
     # -------------------------- ROUTES -----------------------------------------
 
@@ -72,7 +49,7 @@ if __name__ == "__main__":
         if  request.is_json:
             leaderId = request.get_json()["id"]
             mode = request.get_json().get("mode")
-            registerGroup(leaderId,mode)
+            registerGroup(leaderId, conversations, mode)
             return {"id": leaderId, "conv": conversations[leaderId]}, 201
         return {"error": "Request must be JSON"}, 415
 
@@ -96,29 +73,18 @@ if __name__ == "__main__":
             message = request.get_json().get("string")
             context = request.get_json().get("context")
 
-             #args.replyMode
-            #print(sysQuery)
+            if(conversations.get(leaderId)==None):
+                registerGroup(leaderId, conversations)
 
-            group = conversations.get(leaderId)
-            if(group==None):
-                registerGroup(leaderId)
-                #return {"error": "Group with id "+ leaderId +" is not registered."}, 400
+            appendAndSave(message, leaderId, conversations)
+            replies = makeReply(context,leaderId, conversations)
 
-            conversations[leaderId]["history"].append(message)            
-            replies = makeReply(conversations[leaderId], context,leaderId)
-
-            ##just for debugging purposes
             return replies, 200
         return {"error": "Request must be JSON"}, 415
 
     @app.get("/")
     def testEndpoint():
         return conversations, 200        
-
-    def registerGroup(leaderId, mode="rpshort"):
-        mode = "rpshort" if mode==None else mode
-        print("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
-        conversations[leaderId] = {"mode" : mode, "history" : []}
     
     @app.post("/group/<leaderId>/mode")
     def setChatMode(leaderId):
@@ -127,15 +93,15 @@ if __name__ == "__main__":
         if  request.is_json:
             newMode = request.get_json().get("mode")
 
-            group = conversations.get(leaderId)
-            if(group==None):
+            if(conversations.get(leaderId)==None):
                 return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
+
             isValid = any(newMode==allowedMode for allowedMode in validModes)
             if(not(isValid)):
                  return {"error": f"{newMode} is not a valid conversation mode. Valid Modes: {validModes}"}, 400
 
             print(f"Setting chat mode {newMode} for group with leaderId {leaderId}")
-            conversations[leaderId]["mode"] = newMode
+            changeAndPersistSetting(leaderId, "mode", newMode, conversations)
             return newMode, 200
         return {"error": "Request must be JSON"}, 415
     
@@ -147,94 +113,14 @@ if __name__ == "__main__":
         if(group==None):
             return {"error": "Group with id "+ str(leaderId) +" is not registered."}, 400
 
-        conversations[leaderId]["history"] = []
         print(f"Erasing History for group with leaderId {leaderId}")
+        conversations[leaderId]["history"] = []
+        db.eraseHistory(leaderId)
 
         return "erased history", 200
-
-    def makeReply(groupConversation, context, leaderId):
-        modeString = settingsMap["replyMode"][groupConversation["mode"]]
-        playerName = context["players"][0]["name"]
-        sysQuery = prompts.systemBase + "\n" + getContextString(context) + "\n" + prompts.postContext + playerName + ".\n" + modeString
-        sysObj = {"role":"system", "content": sysQuery}
-
-        print(sysQuery)
-
-        #allow for historyculling. Only the <lastn> messages in the stored history should be send to GPT
-        history = ""
-        lastn = 100
-        startn = max(0, len(groupConversation["history"])-lastn)
-        for index in range(startn, len(groupConversation["history"])):
-            history += groupConversation["history"][index]
-            history += "\n"
-        historyObj = {"role":"user", "content": history}
-        
-        #temp
-        #return debugReply        
-        
-        reply = getReplies(sysObj, historyObj, playerName)
-        print("--------------------------------------------------")
-        print("OpenAI API Response: ",reply)
-        print("---------------------------------------------------")
-        replies = reply.split("\n")
-        res = {"replies" : []}
-        for rep in replies:
-            stripped = rep.strip()
-            if stripped=="":
-                continue
-            speakerMessage = stripped.split(":")
-            if(len(speakerMessage)!= 2):
-                continue
-            speaker = speakerMessage[0].strip()
-            mes = speakerMessage[1].strip()
-            res["replies"].append({"speaker" : speaker, "message": mes})
-            conversations[leaderId]["history"].append(speaker+": "+mes+"\n")
-
-        #print("Updated Local History: ", conversations[leaderId]["history"])
-        return res
-
-    #formats the given context JSON into a string with all the necessary context about the group for GPT
-    def getContextString(cont):
-        context = "The Party consists of the real player " + cont["players"][0]["name"]+ ", " + getUnitString(cont["players"][0]) +";\n"
-        context += "and the following Bots/NPCs:\n"
-        lastBotIdx = len(cont["bots"])
-        for index in range(0, lastBotIdx):
-            bot = cont["bots"][index]
-            context += bot["name"] + ", "
-            context += getUnitString(bot)
-            if(index == lastBotIdx-1):
-                context+=".\n"
-            #elif(index == lastBotIdx-2):
-            #    context+=", and\n"
-            else:
-                context += ";\n"
-        
-        context += "All members of the party are Level " + str(cont["players"][0]["level"]) + "."
-        return context        
-        return prompts.debugContext;
-
-    def getReplies(sysMessage, historyMessage, playerName):
-        response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo-0613",
-        messages=[sysMessage, historyMessage],
-        temperature=1,
-        max_tokens=382,
-        top_p=1,
-        frequency_penalty=0.35,
-        presence_penalty=0,
-        stop=[playerName+":"]   #if the model decides to write for the player, this should interrupt it
-        )
-        return response['choices'][0]['message']['content']
     
-    def getUnitString(unitObj):
-        specString = ""
-        if(unitObj.get("spec") != None):
-            specString = unitObj["spec"] + " "
-        return "the " + unitObj["gender"] + " " + unitObj["race"] + " " + specString + unitObj["class"]
-
     #debug
-    registerGroup(999999)
-    #temp
-    registerGroup(1)
-    app.run(debug=True, port=port)
+    registerGroup(999999, conversations)
+    registerGroup(1, conversations)
+    app.run(debug=debug, port=port)
 

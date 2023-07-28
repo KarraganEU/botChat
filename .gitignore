@@ -3,3 +3,4 @@ __pycache__/
 .vs/slnx.sqlite
 .vs/VSWorkspaceState.json
 .vs/botChat/v17/.wsuo
+database.db
