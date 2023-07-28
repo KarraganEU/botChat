@@ -9,7 +9,7 @@ validModes = ["rpshort", "rp", "player"]
 debugReply = {"replies": [
         {
         "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
-                    "speaker": "Bromos"
+                    "speaker": "Valgar"
             },
             {
             "message": "Sounds like a plan. Stratholme is a hot spot for valuable loot too. Count me in for a piece of the action.",
@@ -76,6 +76,8 @@ if __name__ == "__main__":
             if(cache.get(leaderId)==None):
                 registerGroup(leaderId, cache)
 
+            message = context["players"][0]["name"] +": " + message
+            print(message)
             appendAndSave(message, leaderId, cache)
             replies = makeReply(context,leaderId, cache)
 
@@ -120,7 +122,7 @@ if __name__ == "__main__":
         return "erased history", 200
     
     #debug
-    registerGroup(999999, cache)
-    registerGroup(1, cache)
+    #registerGroup(999999, cache)
+    #registerGroup(1, cache)
     app.run(debug=debug, port=port)
 
