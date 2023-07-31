@@ -33,7 +33,10 @@ def init(inMemDB):
     logger = logging.getLogger()
 
     if(apiKey == None):
-        logger.error("Expected OpenAI API KEY as Environment Variable API_KEY")    
+        apiKey = getKeyFromFile()
+        if(apiKey == None):
+            logger.error("Expected OpenAI API KEY as Environment Variable API_KEY or in key.txt")    
+    print(apiKey)
     openai.api_key = apiKey
 
     if(not(os.path.isfile(db.DB_NAME)) or debug):
@@ -155,3 +158,16 @@ def getUnitString(unitObj):
     if(unitObj.get("spec") != None):
         specString = unitObj["spec"] + " "
     return "the " + unitObj["gender"] + " " + unitObj["race"] + " " + specString + unitObj["class"]
+
+def getFileContents(filename):
+    """ Given a filename,
+        return the contents of that file
+    """
+    try:
+        with open(filename, 'r') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        print("'%s' file not found" % filename)
+
+def getKeyFromFile():
+    return getFileContents("key.txt")

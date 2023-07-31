@@ -5,3 +5,4 @@ __pycache__/
 .vs/botChat/v17/.wsuo
 database.db
 log.log
+key.txt
