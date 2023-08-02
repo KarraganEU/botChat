@@ -4,7 +4,10 @@ import openai
 import argparse
 import os
 import logging
+import tiktoken
 
+maxToken=382
+tokenBudget = 4096-maxToken
 settingsMap = {
     "replyMode": {
         "player" : "You should reply out-of-character, i.e. as if you were the player controlling the character.",
@@ -12,6 +15,29 @@ settingsMap = {
         "rpshort": "You should reply in-character, i.e. as if you were the speaking character themselves, but do not be overly verbose. Try to tonally match the races of the speakers (for example like a stereotypical dwarf for dwarves; eloquent and flowery language for night elves, etc). But be succinct, do not ramble."
     }
 }
+
+debugReply = {"replies": [
+        {
+        "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
+        "speaker": "Valgar"
+        },
+        {
+        "message": "Sounds like a plan. Stratholme is a hot spot for valuable loot too. Count me in for a piece of the action.",
+        "speaker": "Osborne"
+        },
+        {
+        "message": "Cleansing Stratholme could also provide us with some valuable research on necromancy and the Scourge. Plus, the dark atmosphere there will give me a chance to test some of my frost spells.",
+        "speaker": "Anetta"
+        },
+        {
+        "message": "The Plaguelands are filled with ancient ruins and hidden treasures. Exploring Stratholme will give me a chance to showcase my hunting skills while lending a hand in purging the Scourge.",
+        "speaker": "Ayanna"
+        },
+        {
+        "message": "Aye, lad! It appears we all agree then. Let us prepare ourselves and make our way to Stratholme together. We shall bring light, justice, and steel down upon the undead scum!",
+        "speaker": "Bromos"
+        }
+    ]}
 
 def init(inMemDB):
     parser = argparse.ArgumentParser()
@@ -86,20 +112,30 @@ def makeReply(context, leaderId, cache):
     sysObj = {"role":"system", "content": sysQuery}
 
     logger.info(sysQuery)
-
+    sysCount = getTokenCount(sysQuery)
     #allow for historyculling. Only the <lastn> messages in the stored history should be send to GPT
-    history = ""
-    lastn = 100
-    startn = max(0, len(groupConversation["history"])-lastn)
-    for index in range(startn, len(groupConversation["history"])):
-        history += groupConversation["history"][index]
-        if(not(history.endswith("\n"))):
-            history += "\n"
+    tempHistory = ""
+    history = []
+    #we need to start with the last messages to always get the latest, but need to append the history in chronological order, hence the double reverse
+    #technically, one history would be sufficient, but this way we don't have to .join the array in every loop to get the raw token count
+    #alternatively, we could discard tempHistory and only save the raw token count we're looping over, but depending on the tokenizer, this would perhaps be less accurate
+    for message in reversed(groupConversation["history"]):        
+        nextMessage = message
+        if(not(nextMessage.endswith("\n"))):
+            nextMessage += "\n"
+        if(getTokenCount(nextMessage + tempHistory) + sysCount > tokenBudget):
+            logger.info("Reached Token limit, culling history")
+            break;
+        history.append(nextMessage)
+        tempHistory += nextMessage
+    
+    history = ''.join(reversed(history))
+
+    logger.info(history)
     historyObj = {"role":"user", "content": history}
     
-    logger.info(history)
     #temp
-    #return debugReply        
+    #return debugReply
     
     reply = getReplies(sysObj, historyObj, playerName)
     logger.info("--------------------------------------------------")
@@ -141,11 +177,12 @@ def getContextString(cont):
     return prompts.debugContext;
 
 def getReplies(sysMessage, historyMessage, playerName):
+    
     response = openai.ChatCompletion.create(
     model="gpt-3.5-turbo-0613",
     messages=[sysMessage, historyMessage],
     temperature=1,
-    max_tokens=382,
+    max_tokens=maxToken,
     top_p=1,
     frequency_penalty=0.35,
     presence_penalty=0,
@@ -171,3 +208,8 @@ def getFileContents(filename):
 
 def getKeyFromFile():
     return getFileContents("key.txt")
+
+def getTokenCount(text) -> int:
+    """Return the number of tokens in a string."""
+    encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+    return len(encoding.encode(text))

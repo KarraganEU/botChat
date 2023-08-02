@@ -1,35 +1,12 @@
 from flask import Flask, request, jsonify
 import logging
-from util import appendAndSave, changeAndPersistSetting, makeReply, init, registerGroup
+from util import appendAndSave, changeAndPersistSetting, makeReply, init, registerGroup, debugReply
 import db
 import os
 
 app = Flask(__name__)
 
 validModes = ["rpshort", "rp", "player"]
-
-debugReply = {"replies": [
-        {
-        "message": "Aye, lad! I think it be a grand idea. Stratholme has long been plagued by the Scourge, and it's our duty to cleanse it. I am ready to smite some undead with the Light!",
-                    "speaker": "Valgar"
-            },
-            {
-            "message": "Sounds like a plan. Stratholme is a hot spot for valuable loot too. Count me in for a piece of the action.",
-            "speaker": "Osborne"
-            },
-            {
-            "message": "Cleansing Stratholme could also provide us with some valuable research on necromancy and the Scourge. Plus, the dark atmosphere there will give me a chance to test some of my frost spells.",
-            "speaker": "Anetta"
-            },
-            {
-            "message": "The Plaguelands are filled with ancient ruins and hidden treasures. Exploring Stratholme will give me a chance to showcase my hunting skills while lending a hand in purging the Scourge.",
-            "speaker": "Elira"
-            },
-            {
-            "message": "Aye, lad! It appears we all agree then. Let us prepare ourselves and make our way to Stratholme together. We shall bring light, justice, and steel down upon the undead scum!",
-            "speaker": "Bromos"
-            }
-    ]}
 
 #a dict of leaderIds (ints)
 #each id maps to a dict with the following components
@@ -71,6 +48,7 @@ if __name__ == "__main__":
     def getReply(leaderId):
         leaderId = int(leaderId)
 
+        #return debugReply, 200
         if  request.is_json:
             message = request.get_json().get("string")
             context = request.get_json().get("context")
