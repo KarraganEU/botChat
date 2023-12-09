@@ -5,6 +5,9 @@ import argparse
 import os
 import logging
 import tiktoken
+from openai import OpenAI
+
+client = None
 
 maxToken=382
 tokenBudget = 4096-maxToken
@@ -63,7 +66,9 @@ def init(inMemDB):
         if(apiKey == None):
             logger.error("Expected OpenAI API KEY as Environment Variable API_KEY or in key.txt")    
     print(apiKey)
-    openai.api_key = apiKey
+
+    global client
+    client = OpenAI(api_key=apiKey)
 
     if(not(os.path.isfile(db.DB_NAME)) or debug):
         db.init()
@@ -71,8 +76,6 @@ def init(inMemDB):
     db.initFromDB(inMemDB) #could also be a return value
 
     return debug, port
-
-
 
 def appendAndSave(message, leaderId, cache):
     """Saves the given message to the DB and appends it to the inMem-Conversation Object"""
@@ -177,8 +180,7 @@ def getContextString(cont):
     return prompts.debugContext;
 
 def getReplies(sysMessage, historyMessage, playerName):
-    
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
     model="gpt-3.5-turbo-0613",
     messages=[sysMessage, historyMessage],
     temperature=1,
@@ -188,7 +190,7 @@ def getReplies(sysMessage, historyMessage, playerName):
     presence_penalty=0,
     stop=[playerName+":"]   #if the model decides to write for the player, this should interrupt it
     )
-    return response['choices'][0]['message']['content']
+    return response.model_dump()['choices'][0]['message']['content']
 
 def getUnitString(unitObj):
     specString = ""

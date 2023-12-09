@@ -56,6 +56,8 @@ if __name__ == "__main__":
             if(cache.get(leaderId)==None):
                 registerGroup(leaderId, cache)
 
+            #the message is sent by itself
+            #currently we're assuming singleplayer, so the first player in the player context should be the only one and hence the speaker
             message = context["players"][0]["name"] +": " + message
             logger.debug(message);
             appendAndSave(message, leaderId, cache)
