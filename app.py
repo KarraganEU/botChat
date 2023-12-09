@@ -19,7 +19,7 @@ cache = {}
 
 if __name__ == "__main__":
     debug, port = init(cache)
-    logger = logging.getLogger()
+    logger = logging.getLogger("botchat")
 
     # -------------------------- ROUTES -----------------------------------------
 

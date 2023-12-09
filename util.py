@@ -53,20 +53,30 @@ def init(inMemDB):
     debug = args.debug
     port = args.port
 
+    logger = logging.getLogger("botchat")
     logLevel = logging.DEBUG if debug else logging.INFO
+    formatter = logging.Formatter('[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s')
     
     ch = logging.StreamHandler()
+    ch.setLevel(logLevel)
+    ch.setFormatter(formatter)
+    
     fh = logging.FileHandler("log.log", encoding='utf-8')
-    logging.basicConfig(level=logLevel, format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s', handlers=[ch,fh])
+    fh.setLevel(logLevel)
+    fh.setFormatter(formatter)
+    
+    #logging.basicConfig(level=logLevel, format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s', handlers=[ch,fh])
 
-    logger = logging.getLogger()
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    logger.setLevel(logLevel)
+    logger.debug("inited logging")
 
     if(apiKey == None):
         apiKey = getKeyFromFile()
         if(apiKey == None):
             logger.error("Expected OpenAI API KEY as Environment Variable API_KEY or in key.txt")    
-    print(apiKey)
-
+    
     global client
     client = OpenAI(api_key=apiKey)
 
@@ -102,12 +112,12 @@ def registerGroup(leaderId,cache, mode="rpshort"):
         return
     makeGroup(leaderId, cache)
     changeAndPersistSetting(leaderId, "mode", mode, cache)    
-    logging.getLogger().info("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
+    logging.getLogger("botchat").info("registering group with leaderId: " + str(leaderId) + " with mode " +mode)
 
 ## BOT REPLIES
 
 def makeReply(context, leaderId, cache):
-    logger = logging.getLogger()
+    logger = logging.getLogger("botchat")
     groupConversation = cache[leaderId]
     modeString = settingsMap["replyMode"][groupConversation["mode"]]
     playerName = context["players"][0]["name"]
